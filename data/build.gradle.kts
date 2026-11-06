@@ -8,7 +8,7 @@ plugins {
 
 kotlin {
     compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_11)
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 
@@ -32,8 +32,8 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     buildFeatures {
@@ -46,6 +46,10 @@ android {
         implementation(libs.okhttp.logging)
 
         implementation(libs.kotlin.serialization.json)
+
+        // Hilt annotations + compiler (no Hilt Gradle plugin needed in a library)
+        implementation(libs.hilt.android)
+        ksp(libs.hilt.compiler)
 
         testImplementation(libs.junit)
         androidTestImplementation(libs.androidx.junit) // Useless dependency

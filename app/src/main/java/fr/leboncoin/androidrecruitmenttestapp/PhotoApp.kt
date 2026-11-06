@@ -1,10 +1,7 @@
 package fr.leboncoin.androidrecruitmenttestapp
 
 import android.app.Application
-import fr.leboncoin.androidrecruitmenttestapp.di.AppDependencies
-import fr.leboncoin.androidrecruitmenttestapp.di.AppDependenciesProvider
+import dagger.hilt.android.HiltAndroidApp
 
-class PhotoApp : Application(), AppDependenciesProvider {
-
-    override val dependencies: AppDependencies by lazy { AppDependencies() }
-}
+@HiltAndroidApp
+class PhotoApp : Application()

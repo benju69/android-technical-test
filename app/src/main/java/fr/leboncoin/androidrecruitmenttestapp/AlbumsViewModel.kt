@@ -1,14 +1,15 @@
 package fr.leboncoin.androidrecruitmenttestapp
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
 import fr.leboncoin.data.network.model.AlbumDto
 import fr.leboncoin.data.repository.AlbumRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 sealed interface AlbumsUiState {
     data object Loading : AlbumsUiState
@@ -16,7 +17,13 @@ sealed interface AlbumsUiState {
     data class Error(val message: String) : AlbumsUiState
 }
 
-class AlbumsViewModel(
+/**
+ * Constructed by Hilt: [AlbumRepository] itself is constructor-injected
+ * through the data module's network graph, so no hand-written Factory is
+ * needed anymore.
+ */
+@HiltViewModel
+class AlbumsViewModel @Inject constructor(
     private val repository: AlbumRepository,
 ) : ViewModel() {
 
@@ -35,15 +42,6 @@ class AlbumsViewModel(
             } catch (_: Exception) {
                 _uiState.value = AlbumsUiState.Error("Failed to load albums")
             }
-        }
-    }
-
-    class Factory(
-        private val repository: AlbumRepository,
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return AlbumsViewModel(repository) as T
         }
     }
 }

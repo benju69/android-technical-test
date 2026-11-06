@@ -10,22 +10,20 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import com.adevinta.spark.SparkTheme
 import com.adevinta.spark.components.image.Illustration
-import fr.leboncoin.androidrecruitmenttestapp.di.AppDependenciesProvider
+import dagger.hilt.android.AndroidEntryPoint
 import fr.leboncoin.androidrecruitmenttestapp.utils.AnalyticsHelper
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class DetailsActivity : ComponentActivity() {
 
-    private val analyticsHelper: AnalyticsHelper by lazy {
-        val dependencies = (application as AppDependenciesProvider).dependencies
-        dependencies.analyticsHelper
-    }
-
+    @Inject
+    lateinit var analyticsHelper: AnalyticsHelper
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        analyticsHelper.initialize(this)
         analyticsHelper.trackScreenView("Details")
 
         setContent {
@@ -40,4 +38,3 @@ class DetailsActivity : ComponentActivity() {
         }
     }
 }
-
