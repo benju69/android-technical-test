@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.network.NetworkHeaders
@@ -87,5 +88,25 @@ fun AlbumItem(
                 }
             }
         }
+    }
+}
+
+@Preview
+@Composable
+private fun AlbumItemPreview() {
+    val sampleAlbum = AlbumDto(
+        id = 1,
+        albumId = 1,
+        title = "accusantium qui exercitationem molestiae quo ut nemo eum",
+        url = "https://picsum.photos/600/600",
+        thumbnailUrl = "https://picsum.photos/150/150",
+    )
+
+    SparkTheme {
+        AlbumItem(
+            album = sampleAlbum,
+            onItemSelected = {},
+            modifier = Modifier.padding(16.dp),
+        )
     }
 }
