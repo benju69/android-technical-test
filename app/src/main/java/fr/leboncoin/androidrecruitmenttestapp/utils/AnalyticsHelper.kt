@@ -8,7 +8,9 @@ class AnalyticsHelper {
     private var context: Context? = null
 
     fun initialize(context: Context) {
-        this.context = context
+        // Keep only the application context to avoid leaking an Activity reference
+        // in an app-scoped object (leak reported by LeakCanary).
+        this.context = context.applicationContext
     }
 
     fun trackSelection(itemId: String) {
