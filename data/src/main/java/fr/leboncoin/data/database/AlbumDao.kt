@@ -23,7 +23,7 @@ interface AlbumDao {
     suspend fun insertAll(albums: List<AlbumEntity>)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertFavorite(albumId: FavoriteEntity)
+    suspend fun insertFavorite(favorite: FavoriteEntity)
 
     @Query("DELETE FROM favorites WHERE albumId = :albumId")
     suspend fun deleteFavorite(albumId: Int)
