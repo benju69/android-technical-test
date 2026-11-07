@@ -14,7 +14,7 @@ module `:data`.
 
 1. [Injection de dépendances : Hilt](#1-injection-de-dépendances--hilt)
 2. [Architecture par couches (MVVM + Repository)](#2-architecture-par-couches) — *à venir*
-3. [Persistance offline : Room](#3-persistance-offline--room) — *à venir*
+3. [Persistance offline : Room](#3-persistance-offline--room)
 4. [Navigation](#4-navigation) — *à venir*
 5. [Réseau : Retrofit + kotlinx-serialization](#5-réseau) — *à venir*
 6. [UI : Compose + Spark design system](#6-ui) — *à venir*
@@ -134,3 +134,99 @@ La description détaillée du module `:data` viendra avec sa refonte
   comme prévu** (on les construit à la main avec leurs arguments); en contrepartie
   il y aura, plus tard, des tests **Robolectric/instrumentés** si l'on veut tester
   le graphe lui-même.
+
+---
+
+
+## 3. Persistance offline : Room
+
+### 3.1 Pourquoi Room (le constat de départ)
+
+Le projet d'origine n'avait **aucune persistance** : les albums n'existaient
+que dans l'état mémoire du ViewModel, donc vides à chaque redémarrage. Or
+l'énoncé impose deux exigences qui vont dans le même sens : les données
+doivent rester disponibles **hors ligne, même après redémarrage**, et les
+favoris doivent être **persistés localement**. Une seule brique couvre les
+deux : une base de données structurée.
+
+Options considérées :
+
+| Option | Verdict |
+|---|---|
+| **SharedPreferences** | Clé/valeur pur : sérialiser la liste en JSON dans une string, pas de requêtes, pas de réactivité, pas de migration. Acceptable pour *simuler* l'analytics (ce que fait `AnalyticsHelper`), pas pour un dataset interrogé |
+| **DataStore** | Persiste bien un dataset sérialisé, mais pas de requêtes structurées ni de relations entre données ; adapté aux préférences, pas à une liste consultable |
+| **SQLDelight** | Excellent (SQL type-safe first), mais moins standard côté Android/Google et moins accessible à la relecture qu'un choix mainstream |
+| **Room** ✅ | Standard Android : requêtes SQL **vérifiées à la compilation**, `Flow` réactif (la liste se re-émet toute seule à chaque toggle de favori, sans code de resynchronisation manuel), migrations outillées, KSP déjà en place |
+
+Les points décisifs pour ce projet :
+
+1. **Room installe la base comme source de vérité** : la liste affichée vient
+   de la base, le réseau se contente de la rafraîchir. Le mode "hors ligne"
+   en devient naturel : si l'API est down mais que le cache existe, l'UI
+   affiche les données, sans branche de code spéciale.
+2. **Albums *et* favoris exigent des requêtes structurées** (jointure de la
+   liste avec l'état favori), pas une liste sérialisée en blob.
+3. **Le versionning du schéma est outillé** (`@Database(version = 1)`), utile
+   dès la première évolution (§9).
+
+### 3.2 Le schéma
+
+Deux tables, reliées par le champ `albumId` :
+
+```
+┌─ albums ─────────────────────────────┐    ┌─ favorites ─────────────┐
+│ id (PK)     ← id de la photo (JSON)  │    │ albumId (PK)            │
+│ albumId     ← id de l'album "parent" │◀───┤                         │
+│ title                                │    └── une ligne par favori ─┘
+│ url                                  │
+│ thumbnailUrl                         │
+└──────────────────────────────────────┘
+```
+
+**Pourquoi une `favorites` séparée plutôt qu'une colonne `favorite` sur
+`albums`** : le refresh réseau écrit les albums avec
+`@Insert(onConflict = REPLACE)` — avec la colonne `favorite` sur la même
+table, chaque refresh réseau **réinitialiserait** les favoris de
+l'utilisateur. En séparant, le REPLACE sur `albums` ne touche jamais les
+favoris : les toggles de l'utilisateur ne sont jamais perdus.
+
+### 3.3 Le wiring
+
+- `AlbumDao.observeAllWithFavorite()` : un `Flow<List<AlbumWithFavorite>>`
+  dont la requête SQL calcule le flag directement dans SQLite
+  (`EXISTS(SELECT 1 FROM favorites …)`) — pas de re-traitement Kotlin côté
+  applicatif, et la table est re-notifiée automatiquement pour toute écriture
+  sur `albums` ou `favorites`.
+- `AlbumRepository` devient **offline-first** :
+  - `observeAlbums(): Flow<List<Album>>` — lecture Room seule, c'est la source
+    de vérité consommée par le ViewModel ;
+  - `refresh()` — réseau puis cache (write-through) ; les erreurs remontent au
+    ViewModel, qui décide de leur traitement ;
+  - `toggleFavorite(albumId, favorite)` — écriture sur la table `favorites`.
+- `AlbumsViewModel` : le `uiState` est déduit de
+  `combine(observeAlbums(), refreshFailed)` — les albums s'affichent dès que
+  la base en contient, et Error n'est montré que si **à la fois** le cache est
+  vide et le réseau a échoué (dégradation = d'abord le cache).
+- Hilt : `DatabaseModule` fournit `AppDatabase` et `AlbumDao`, toujours dans
+  `SingletonComponent`.
+
+### 3.4 Modèle domaine
+
+Ce chantier a été l'occasion d'arrêter de faire circuler le DTO réseau
+(`AlbumDto`) jusque dans l'UI : le ViewModel expose désormais des
+`fr.leboncoin.data.model.Album`. Chaîne : `AlbumDto` (réseau) →
+`AlbumEntity` (cache) → `Album` (UI), un mapper par maillon
+(`AlbumMappers.kt`). Bénéfices : l'UI ne dépend plus du format JSON, et le
+champ `favorite` — qui n'existe pas côté réseau — a une place naturelle.
+
+### 3.5 Limites assumées
+
+- `exportSchema = false` (fichier de schéma Room non exporté) : acceptable sur
+  ce projet, mais une vraie app exporterait le schéma et aurait des tests de
+  migration.
+- Pas de tests Room in-memory en JVM pur (nécessite un environnement
+  Android) : la sémantique REPLACE est répliquée par le fake hand-written
+  `FakeAlbumDao` dans les tests unitaires ; un `androidTest` sur le DAO réel
+  viendra avec la phase tests.
+- Le DAO reste minimal (4 méthodes) : le filtrage et la pagination par album
+  sont listés en évolutions (§9).

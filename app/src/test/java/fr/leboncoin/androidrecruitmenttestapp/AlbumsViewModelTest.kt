@@ -1,11 +1,20 @@
 package fr.leboncoin.androidrecruitmenttestapp
 
 import app.cash.turbine.test
+import fr.leboncoin.data.database.AlbumDao
+import fr.leboncoin.data.database.AlbumEntity
+import fr.leboncoin.data.database.AlbumWithFavorite
+import fr.leboncoin.data.database.FavoriteEntity
+import fr.leboncoin.data.mapper.toEntity
+import fr.leboncoin.data.model.Album
 import fr.leboncoin.data.network.api.AlbumApiService
 import fr.leboncoin.data.network.model.AlbumDto
 import fr.leboncoin.data.repository.AlbumRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -19,29 +28,27 @@ import org.junit.Test
 import java.io.IOException
 
 // -----------------------------------------------------------------------------
-// Sample data shared by the tests.
-//
-// They mirror the shape of https://static.leboncoin.fr/img/shared/technical-test.json:
-// an album "contains" many photos, each photo has its albumId, a display
-// `title` and two image URLs (full `url` + `thumbnailUrl`).
+// Sample data mirroring https://static.leboncoin.fr/img/shared/technical-test.json
 // -----------------------------------------------------------------------------
-private val sampleAlbums = listOf(
+private val sampleDto = listOf(
     AlbumDto(id = 1, albumId = 1, title = "accusantium qui exercitationem", url = "u1", thumbnailUrl = "tu1"),
     AlbumDto(id = 2, albumId = 1, title = "omnis laboriosam repellendus", url = "u2", thumbnailUrl = "tu2"),
     AlbumDto(id = 3, albumId = 2, title = "sunt aut facere repellat", url = "u3", thumbnailUrl = "tu3"),
 )
 
+// What the UI should observe once these 3 DTOs are cached (favorite=false:
+// a payload freshly written by a network refresh never carries user state —
+// favorites live in their own table).
+private val sampleAlbums = sampleDto.map { it.toEntity().album(favorite = false) }
+
+private fun AlbumEntity.album(favorite: Boolean) = Album(
+    id = id, albumId = albumId, title = title, url = url,
+    thumbnailUrl = thumbnailUrl, favorite = favorite,
+)
+
 /**
- * Hand-written fake of the API.
- *
- * It lives one level below [AlbumRepository] because the ViewModel receives the
- * concrete `AlbumRepository` class (not an interface): faking the Retrofit
- * interface lets us test the whole VM chain — repository included — without
- * needing a mocking library (MockK) or real HTTP (OkHttp MockWebServer).
- *
- * The fake returns a pre-configured `Result`:
- * - `Result.success(albums)` -> the "happy path" network call
- * - `Result.failure(exception)` -> simulates any network/parse error
+ * Fake of the Retrofit interface: configures success/failure per test, no
+ * mocking library nor real HTTP involved.
  */
 private class FakeAlbumApiService : AlbumApiService {
     var result: Result<List<AlbumDto>> = Result.success(emptyList())
@@ -50,94 +57,98 @@ private class FakeAlbumApiService : AlbumApiService {
 }
 
 /**
- * Note on the plumbing: on a real device, `viewModelScope` runs its coroutines
- * on `Dispatchers.Main.immediate`, which only exists on Android. In a plain JVM
- * unit test there is no Main dispatcher, so any coroutine touching the
- * ViewModel would crash with an IllegalStateException. That's why we replace it
- * with a test dispatcher in @Before and restore the real one in @After.
+ * In-memory fake of the DAO reproducing the real tables' behaviour:
+ * albums (network cache) and favorites kept in their own collections so a
+ * refresh never resets favorites, same as the real REPLACE semantics.
+ */
+private class FakeAlbumDao : AlbumDao {
+    private val albums = MutableStateFlow<List<AlbumEntity>>(emptyList())
+    private val favorites = MutableStateFlow<Set<Int>>(emptySet())
+
+    override fun observeAllWithFavorite(): Flow<List<AlbumWithFavorite>> =
+        combine(albums, favorites) { data, favs ->
+            data.map { AlbumWithFavorite(album = it, favorite = it.id in favs) }
+        }
+
+    override suspend fun insertAll(albums: List<AlbumEntity>) {
+        this.albums.value = albums
+    }
+
+    override suspend fun insertFavorite(albumId: FavoriteEntity) {
+        favorites.value = favorites.value + albumId.albumId
+    }
+
+    override suspend fun deleteFavorite(albumId: Int) {
+        favorites.value = favorites.value - albumId
+    }
+}
+
+/**
+ * Plumbing note: viewModelScope runs on Dispatchers.Main.immediate which only
+ * exists on Android. In plain JVM tests we replace it with a
+ * StandardTestDispatcher so the test explicitly advances time
+ * (advanceUntilIdle) and observes intermediate states like Loading.
+ *
+ * All tests assert from inside uiState.test{} (Turbine): the ViewModel
+ * shares its state with SharingStarted.WhileSubscribed, so the upstream
+ * pipeline only runs while a collector is subscribed to the StateFlow —
+ * reading .value without a subscription would never leave the initial value.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AlbumsViewModelTest {
 
-    /**
-     * StandardTestDispatcher queues coroutines instead of running them
-     * eagerly: the tester explicitly advances time with advanceUntilIdle().
-     *
-     * This is exactly what we want here: it lets us observe the intermediate
-     * `Loading` state before the network call completes, the same way a slow
-     * network would on a device.
-     */
     private val mainDispatcher = StandardTestDispatcher()
-
     private lateinit var service: FakeAlbumApiService
+    private lateinit var dao: FakeAlbumDao
 
     @Before
     fun setUp() {
-        // Install the test dispatcher as Main for every test
         Dispatchers.setMain(mainDispatcher)
-        // Fresh fake per test so tests stay fully isolated from one another
         service = FakeAlbumApiService()
+        dao = FakeAlbumDao()
     }
 
     @After
     fun tearDown() {
-        // Restore the real dispatcher so this test never leaks into other suites
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel() = AlbumsViewModel(AlbumRepository(service))
+    private fun createViewModel() = AlbumsViewModel(AlbumRepository(service, dao))
 
     /**
-     * Happy path when entering the screen:
-     * the VM constructor triggers loadAlbums() in its init block, so the
-     * UI state must go Loading (frame 1, the spinner) then Success (frame 2,
-     * the list) without anything else in between.
-     *
-     * Turbine turns the StateFlow into a queue we can assert on with
-     * awaitItem(); it is the canonical way to test flows emitted from
-     * "outside" the test coroutine.
+     * Happy path: init triggers a refresh; once the fake API answered, the
+     * Room-backed flow emits the albums and the state goes Loading -> Success.
      */
     @Test
-    fun `init exposes Loading then Success with fetched albums`() = runTest {
-        service.result = Result.success(sampleAlbums)
-
+    fun `init exposes Loading then Success with cached albums`() = runTest {
+        service.result = Result.success(sampleDto)
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
-            // StateFlow always emits its current value first to a new
-            // subscriber: right after init, that value is Loading
-            // (the network call is queued but has not run yet).
+            // StateFlow always emits its current value first; the refresh is
+            // queued but has not run yet
             assertEquals(AlbumsUiState.Loading, awaitItem())
-
-            // Run the queued coroutine: repository.getAllAlbums() returns
-            // our fake albums and the state switches to Success
             advanceUntilIdle()
-
             val state = awaitItem()
             assertTrue("Expected Success state, got $state", state is AlbumsUiState.Success)
-            // Exact equality: no album added, dropped or reordered
             assertEquals(sampleAlbums, (state as AlbumsUiState.Success).albums)
-            // StateFlow never completes, so stop the collection here
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     /**
-     * Error path: the repository throws (e.g. no network, 5xx, malformed
-     * JSON). The ViewModel must surface a declarative Error state instead of
-     * crashing — "the app must not crash systematically" is a hard rejection
-     * criterion in the assignment.
+     * Error path, first launch: nothing in the cache and the network fails.
+     * The ViewModel must surface Error instead of crashing (hard rejection
+     * criterion of the assignment).
      */
     @Test
-    fun `init exposes Loading then Error when repository fails`() = runTest {
-        service.result = Result.failure(IOException("Network down"))
-
+    fun `init exposes Loading then Error when refresh fails and cache is empty`() = runTest {
+        service.result = Result.failure(IOException("Airplane mode"))
         val viewModel = createViewModel()
 
         viewModel.uiState.test {
             assertEquals(AlbumsUiState.Loading, awaitItem())
             advanceUntilIdle()
-
             val state = awaitItem()
             assertTrue("Expected Error state, got $state", state is AlbumsUiState.Error)
             cancelAndIgnoreRemainingEvents()
@@ -145,29 +156,87 @@ class AlbumsViewModelTest {
     }
 
     /**
-     * Recovery path: same behaviour as the Retry button of AlbumsScreen,
-     * which calls viewModel::loadAlbums from the Error state.
-     *
-     * Sequence:
-     * 1. list fails -> Error
-     * 2. network "comes back" (fake reconfigured) + loadAlbums() called again
-     * 3. state must be back to Success with fresh data
+     * Offline requirement of the assignment: data must survive restarts and
+     * stay available without network. Here the cache was pre-seeded (as it
+     * would be after a previous session) and the network is down: the UI
+     * must still show the cached albums, never the Error state.
+     */
+    @Test
+    fun `cached albums are displayed even when the network is down`() = runTest {
+        dao.insertAll(sampleDto.map { it.toEntity() })
+        service.result = Result.failure(IOException("Airplane mode"))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            assertEquals(AlbumsUiState.Loading, awaitItem())
+            advanceUntilIdle()
+            val state = awaitItem()
+            assertTrue("Expected Success state, got $state", state is AlbumsUiState.Success)
+            assertEquals(sampleAlbums, (state as AlbumsUiState.Success).albums)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
+     * Recovery path: same behaviour as the Retry button of AlbumsScreen.
+     * Fail first (Error state), then let the network answer and retry.
      */
     @Test
     fun `retry after a failure recovers to Success`() = runTest {
         service.result = Result.failure(IOException("Network down"))
         val viewModel = createViewModel()
-        advanceUntilIdle()
-        // Sanity check the precondition: we are actually in the Error state
-        assertTrue(viewModel.uiState.value is AlbumsUiState.Error)
 
-        // Simulates the user tapping Retry on a working network
-        service.result = Result.success(sampleAlbums)
-        viewModel.loadAlbums()
-        advanceUntilIdle()
+        viewModel.uiState.test {
+            assertEquals(AlbumsUiState.Loading, awaitItem())
+            advanceUntilIdle()
+            assertTrue("Expected Error state", awaitItem() is AlbumsUiState.Error)
 
-        val state = viewModel.uiState.value
-        assertTrue("Expected Success state after retry, got $state", state is AlbumsUiState.Success)
-        assertEquals(sampleAlbums, (state as AlbumsUiState.Success).albums)
+            // Simulates the user tapping Retry on a working network
+            service.result = Result.success(sampleDto)
+            viewModel.loadAlbums()
+            advanceUntilIdle()
+
+            val state = awaitItem()
+            assertTrue("Expected Success state after retry, got $state", state is AlbumsUiState.Success)
+            assertEquals(sampleAlbums, (state as AlbumsUiState.Success).albums)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
+     * Favorites round trip: toggling writes through the repository to the
+     * "favorites" table, and the Room flow re-emits the list with the
+     * updated favorite flag. This is the persistence requirement.
+     */
+    @Test
+    fun `toggleFavorite updates the persisted favorite state`() = runTest {
+        service.result = Result.success(sampleDto)
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            assertEquals(AlbumsUiState.Loading, awaitItem())
+            advanceUntilIdle()
+            val initial = awaitItem()
+            assertTrue("Expected Success state, got $initial", initial is AlbumsUiState.Success)
+            val album = (initial as AlbumsUiState.Success).albums[0]
+            assertTrue("Expected the album not to be favorite initially", !album.favorite)
+
+            viewModel.toggleFavorite(album)
+            advanceUntilIdle()
+
+            var state = awaitItem()
+            assertTrue("Expected Success state, got $state", state is AlbumsUiState.Success)
+            var toggled = (state as AlbumsUiState.Success).albums.first { it.id == album.id }
+            assertTrue("Expected the album to become favorite", toggled.favorite)
+
+            // Toggle back
+            viewModel.toggleFavorite(toggled)
+            advanceUntilIdle()
+
+            state = awaitItem()
+            val reverted = (state as AlbumsUiState.Success).albums.first { it.id == album.id }
+            assertTrue("Expected the album to no longer be favorite", !reverted.favorite)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 }

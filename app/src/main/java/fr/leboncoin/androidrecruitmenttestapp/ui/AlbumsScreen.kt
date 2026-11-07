@@ -25,12 +25,12 @@ import com.adevinta.spark.components.text.Text
 import fr.leboncoin.androidrecruitmenttestapp.AlbumsUiState
 import fr.leboncoin.androidrecruitmenttestapp.AlbumsViewModel
 import fr.leboncoin.androidrecruitmenttestapp.R
-import fr.leboncoin.data.network.model.AlbumDto
+import fr.leboncoin.data.model.Album
 
 @Composable
 fun AlbumsScreen(
     viewModel: AlbumsViewModel,
-    onItemSelected: (AlbumDto) -> Unit,
+    onItemSelected: (Album) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -42,6 +42,7 @@ fun AlbumsScreen(
             is AlbumsUiState.Success -> AlbumsContent(
                 albums = state.albums,
                 onItemSelected = onItemSelected,
+                onFavoriteToggle = viewModel::toggleFavorite,
                 contentPadding = paddingValues,
             )
 
@@ -68,8 +69,9 @@ private fun AlbumsLoading(paddingValues: PaddingValues, modifier: Modifier = Mod
 
 @Composable
 private fun AlbumsContent(
-    albums: List<AlbumDto>,
-    onItemSelected: (AlbumDto) -> Unit,
+    albums: List<Album>,
+    onItemSelected: (Album) -> Unit,
+    onFavoriteToggle: (Album) -> Unit,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
@@ -85,6 +87,7 @@ private fun AlbumsContent(
             AlbumItem(
                 album = album,
                 onItemSelected = onItemSelected,
+                onFavoriteToggle = onFavoriteToggle,
             )
         }
     }
@@ -113,7 +116,7 @@ private fun AlbumsError(
     }
 }
 
-@Preview(showBackground = true)
+@Preview
 @Composable
 private fun AlbumsLoadingPreview() {
     SparkTheme {
@@ -121,30 +124,33 @@ private fun AlbumsLoadingPreview() {
     }
 }
 
-@Preview(showBackground = true)
+@Preview
 @Composable
 private fun AlbumsContentPreview() {
     val sampleAlbums = listOf(
-        AlbumDto(
+        Album(
             id = 1,
             albumId = 1,
             title = "accusantium qui exercitationem molestiae quo ut nemo eum",
             url = "https://picsum.photos/600/600",
             thumbnailUrl = "https://picsum.photos/150/150",
+            favorite = false,
         ),
-        AlbumDto(
+        Album(
             id = 2,
             albumId = 1,
             title = "omnis laboriosam repellendus commodi",
             url = "https://picsum.photos/600/600",
             thumbnailUrl = "https://picsum.photos/150/150",
+            favorite = true,
         ),
-        AlbumDto(
+        Album(
             id = 3,
             albumId = 1,
             title = "sunt aut facere repellat provident occaecati excepturi optio reprehenderit",
             url = "https://picsum.photos/600/600",
             thumbnailUrl = "https://picsum.photos/150/150",
+            favorite = false,
         ),
     )
 
@@ -152,12 +158,13 @@ private fun AlbumsContentPreview() {
         AlbumsContent(
             albums = sampleAlbums,
             onItemSelected = {},
+            onFavoriteToggle = {},
             contentPadding = PaddingValues(16.dp),
         )
     }
 }
 
-@Preview(showBackground = true)
+@Preview
 @Composable
 private fun AlbumsErrorPreview() {
     SparkTheme {
