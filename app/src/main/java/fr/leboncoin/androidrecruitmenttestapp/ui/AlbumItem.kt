@@ -14,8 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,8 +32,11 @@ import com.adevinta.spark.ExperimentalSparkApi
 import com.adevinta.spark.SparkTheme
 import com.adevinta.spark.components.card.Card
 import com.adevinta.spark.components.chips.ChipTinted
+import com.adevinta.spark.components.icons.IconButton
+import com.adevinta.spark.components.text.Text
 import fr.leboncoin.androidrecruitmenttestapp.R
 import fr.leboncoin.data.model.Album
+import com.adevinta.spark.components.icons.Icon
 
 @OptIn(ExperimentalSparkApi::class)
 @Composable
@@ -120,7 +121,29 @@ private fun FavoriteButton(
             contentDescription = stringResource(
                 if (favorite) R.string.remove_from_favorites else R.string.add_to_favorites
             ),
-            tint = if (favorite) SparkTheme.colors.support else SparkTheme.colors.neutralContainer,
+            tint = if (favorite) SparkTheme.colors.accent else SparkTheme.colors.neutral,
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun AlbumItemPreviewWithFavorite() {
+    val sampleAlbum = Album(
+        id = 1,
+        albumId = 1,
+        title = "accusantium qui exercitationem molestiae quo ut nemo eum",
+        url = "https://picsum.photos/600/600",
+        thumbnailUrl = "https://picsum.photos/150/150",
+        favorite = true,
+    )
+
+    SparkTheme {
+        AlbumItem(
+            album = sampleAlbum,
+            onItemSelected = {},
+            onFavoriteToggle = {},
+            modifier = Modifier.padding(16.dp),
         )
     }
 }
@@ -134,7 +157,7 @@ private fun AlbumItemPreview() {
         title = "accusantium qui exercitationem molestiae quo ut nemo eum",
         url = "https://picsum.photos/600/600",
         thumbnailUrl = "https://picsum.photos/150/150",
-        favorite = true,
+        favorite = false,
     )
 
     SparkTheme {
