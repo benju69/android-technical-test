@@ -11,10 +11,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
-import com.adevinta.spark.SparkTheme
 import com.adevinta.spark.components.image.Illustration
 import dagger.hilt.android.AndroidEntryPoint
 import fr.leboncoin.androidrecruitmenttestapp.ui.DetailsScreen
+import fr.leboncoin.androidrecruitmenttestapp.ui.theme.AppTheme
 import fr.leboncoin.androidrecruitmenttestapp.utils.AnalyticsHelper
 import javax.inject.Inject
 
@@ -38,7 +38,7 @@ class DetailsActivity : ComponentActivity() {
         analyticsHelper.trackScreenView("Details")
 
         setContent {
-            SparkTheme {
+            AppTheme {
                 val album by viewModel.album.collectAsStateWithLifecycle()
 
                 if (album != null) {
