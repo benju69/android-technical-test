@@ -15,6 +15,12 @@ interface AlbumDao {
     )
     fun observeAllWithFavorite(): Flow<List<AlbumWithFavorite>>
 
+    @Query(
+        "SELECT a.*, EXISTS(SELECT 1 FROM favorites f WHERE f.albumId = a.id) AS favorite " +
+            "FROM albums a WHERE a.id = :id"
+    )
+    fun observeAlbum(id: Int): Flow<AlbumWithFavorite?>
+
     /**
      * Cache the network response. REPLACE keeps the albums table in sync with
      * the source; favorites are unaffected (separate table).

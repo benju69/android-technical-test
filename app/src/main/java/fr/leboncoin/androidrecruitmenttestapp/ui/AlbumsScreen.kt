@@ -116,7 +116,7 @@ private fun AlbumsError(
     }
 }
 
-@Preview
+@Preview(showBackground = true)
 @Composable
 private fun AlbumsLoadingPreview() {
     SparkTheme {
@@ -124,7 +124,7 @@ private fun AlbumsLoadingPreview() {
     }
 }
 
-@Preview
+@Preview(showBackground = true)
 @Composable
 private fun AlbumsContentPreview() {
     val sampleAlbums = listOf(
@@ -164,7 +164,7 @@ private fun AlbumsContentPreview() {
     }
 }
 
-@Preview
+@Preview(showBackground = true)
 @Composable
 private fun AlbumsErrorPreview() {
     SparkTheme {

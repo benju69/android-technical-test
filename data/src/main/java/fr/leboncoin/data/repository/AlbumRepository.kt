@@ -29,6 +29,13 @@ class AlbumRepository @Inject constructor(
         albumDao.observeAllWithFavorite().map { it.map(AlbumWithFavorite::toAlbum) }
 
     /**
+     * Single album observation by id; null once the query completes without
+     * a match (the cache must be setup before).
+     */
+    fun observeAlbum(id: Int): Flow<Album?> =
+        albumDao.observeAlbum(id).map { it?.toAlbum() }
+
+    /**
      * Fetches the remote albums and writes them in the cache.
      * Favorites live in their own table, so a refresh never resets them.
      * Exceptions propagate to the caller (the ViewModel decides how to

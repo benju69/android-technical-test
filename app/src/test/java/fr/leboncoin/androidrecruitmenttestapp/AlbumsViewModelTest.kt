@@ -1,20 +1,10 @@
 package fr.leboncoin.androidrecruitmenttestapp
 
 import app.cash.turbine.test
-import fr.leboncoin.data.database.AlbumDao
-import fr.leboncoin.data.database.AlbumEntity
-import fr.leboncoin.data.database.AlbumWithFavorite
-import fr.leboncoin.data.database.FavoriteEntity
 import fr.leboncoin.data.mapper.toEntity
-import fr.leboncoin.data.model.Album
-import fr.leboncoin.data.network.api.AlbumApiService
-import fr.leboncoin.data.network.model.AlbumDto
 import fr.leboncoin.data.repository.AlbumRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -27,62 +17,6 @@ import org.junit.Before
 import org.junit.Test
 import java.io.IOException
 
-// -----------------------------------------------------------------------------
-// Sample data mirroring https://static.leboncoin.fr/img/shared/technical-test.json
-// -----------------------------------------------------------------------------
-private val sampleDto = listOf(
-    AlbumDto(id = 1, albumId = 1, title = "accusantium qui exercitationem", url = "u1", thumbnailUrl = "tu1"),
-    AlbumDto(id = 2, albumId = 1, title = "omnis laboriosam repellendus", url = "u2", thumbnailUrl = "tu2"),
-    AlbumDto(id = 3, albumId = 2, title = "sunt aut facere repellat", url = "u3", thumbnailUrl = "tu3"),
-)
-
-// What the UI should observe once these 3 DTOs are cached (favorite=false:
-// a payload freshly written by a network refresh never carries user state —
-// favorites live in their own table).
-private val sampleAlbums = sampleDto.map { it.toEntity().album(favorite = false) }
-
-private fun AlbumEntity.album(favorite: Boolean) = Album(
-    id = id, albumId = albumId, title = title, url = url,
-    thumbnailUrl = thumbnailUrl, favorite = favorite,
-)
-
-/**
- * Fake of the Retrofit interface: configures success/failure per test, no
- * mocking library nor real HTTP involved.
- */
-private class FakeAlbumApiService : AlbumApiService {
-    var result: Result<List<AlbumDto>> = Result.success(emptyList())
-
-    override suspend fun getAlbums(): List<AlbumDto> = result.getOrThrow()
-}
-
-/**
- * In-memory fake of the DAO reproducing the real tables' behaviour:
- * albums (network cache) and favorites kept in their own collections so a
- * refresh never resets favorites, same as the real REPLACE semantics.
- */
-private class FakeAlbumDao : AlbumDao {
-    private val albums = MutableStateFlow<List<AlbumEntity>>(emptyList())
-    private val favorites = MutableStateFlow<Set<Int>>(emptySet())
-
-    override fun observeAllWithFavorite(): Flow<List<AlbumWithFavorite>> =
-        combine(albums, favorites) { data, favs ->
-            data.map { AlbumWithFavorite(album = it, favorite = it.id in favs) }
-        }
-
-    override suspend fun insertAll(albums: List<AlbumEntity>) {
-        this.albums.value = albums
-    }
-
-    override suspend fun insertFavorite(favorite: FavoriteEntity) {
-        favorites.value = favorites.value + favorite.albumId
-    }
-
-    override suspend fun deleteFavorite(albumId: Int) {
-        favorites.value = favorites.value - albumId
-    }
-}
-
 /**
  * Plumbing note: viewModelScope runs on Dispatchers.Main.immediate which only
  * exists on Android. In plain JVM tests we replace it with a
@@ -93,6 +27,9 @@ private class FakeAlbumDao : AlbumDao {
  * shares its state with SharingStarted.WhileSubscribed, so the upstream
  * pipeline only runs while a collector is subscribed to the StateFlow —
  * reading .value without a subscription would never leave the initial value.
+ *
+ * Fakes (FakeAlbumApiService / FakeAlbumDao) live in Fakes.kt, shared with
+ * DetailsViewModelTest.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AlbumsViewModelTest {

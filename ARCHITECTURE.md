@@ -230,3 +230,51 @@ champ `favorite` — qui n'existe pas côté réseau — a une place naturelle.
   viendra avec la phase tests.
 - Le DAO reste minimal (4 méthodes) : le filtrage et la pagination par album
   sont listés en évolutions (§9).
+
+---
+
+## 4. Navigation (écran de détail)
+
+### 4.1 Détail : l'id navigue, pas l'objet
+
+La navigation liste → détail transmet **uniquement l'id de l'album**
+(`DetailsActivity.ALBUM_ID_KEY`, extra d'Intent). L'écran de détail n'affiche
+pas d'objet reçu au lancement : il **ré-observe l'album depuis le repository**
+(`AlbumRepository.observeAlbum(id)`), qui lit la base Room.
+
+**Pourquoi pas un `Album @Parcelable` passé en extra** (l'approche naïve et
+courante) :
+
+| | Objet Parcelable en extra | Id + ré-observation (retenu) |
+|---|---|---|
+| Fraîcheur des données | L'objet est une copie figée au clic ; si le favori est toggled entre-temps, le détail affiche un état déphasé | Toujours l'état courant du cache (Room) |
+| Changements de configuration | L'extra survit à la rotation (pas de crash), mais l'objet reste figé | Survit aussi (l'extra est conservé), et l'état est récupéré à chaud |
+| **Process death** (éliminatoire) | L'extra d'Intent est restauré par le système — l'objet survit | L'id est restauré via `SavedStateHandle`, contenu rechargé depuis la base |
+| Couplage | Le modèle domaine deviendrait `android.os.Parcelable` (+ plugin `kotlin-parcelize` dans `:data`, ce qui casse la neutralité Android de la couche domaine) | Modèle domaine pur ; la base reste la seule source de vérité |
+| Extension Navigation Compose | Il faudrait re-sérialiser l'objet en argument de route | Le pattern est déjà correct : l'argument de route EST un id (cf. §9) |
+
+En pratique : `DetailsViewModel` lit l'id dans
+`SavedStateHandle[ALBUM_ID_KEY]` (injecté automatiquement par Hilt dans le
+constructeur du `@HiltViewModel`), expose
+`album: StateFlow<Album?>` (null = inconnu → fallback), et `toggleFavorite()`
+écrit sur la table favorites comme pour la liste. Un album n'existant pas
+(ou cache vide avec réseau coupé) affiche la figure "work in progress"
+plutôt qu'un crash — cohérent avec le critère « l'application ne doit pas
+crasher systématiquement ».
+
+### 4.2 Conception d'écran
+
+`DetailsActivity` reste un composant minuscule : field injection analytics +
+`viewModels()`, collection `collectAsStateWithLifecycle`, et délégation
+totale à `DetailsScreen` (stateless, préviewable, testable sans activity). Le
+bouton cœur (`FavoriteButton`) est **partagé** entre la liste et le détail
+(`ui/FavoriteButton.kt`) : même interaction, mêmes strings
+d'accessibilité, un seul endroit à faire évoluer.
+
+### 4.3 Bout du chemin déjà documenté
+
+Le passage à **Navigation Compose (single-activity)** est prévu au §9 : il
+consistera essentiellement à remplacer la paire d'Activities par un NavHost
+dont l'argument de route est… ce même id. Les ViewModels
+(`@HiltViewModel` avec `SavedStateHandle` déjà branché) ne changent pas :
+c'est la preuve que les couches de routage et d'état sont découplées.

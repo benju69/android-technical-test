@@ -9,17 +9,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -32,11 +26,8 @@ import com.adevinta.spark.ExperimentalSparkApi
 import com.adevinta.spark.SparkTheme
 import com.adevinta.spark.components.card.Card
 import com.adevinta.spark.components.chips.ChipTinted
-import com.adevinta.spark.components.icons.IconButton
 import com.adevinta.spark.components.text.Text
-import fr.leboncoin.androidrecruitmenttestapp.R
 import fr.leboncoin.data.model.Album
-import com.adevinta.spark.components.icons.Icon
 
 @OptIn(ExperimentalSparkApi::class)
 @Composable
@@ -103,26 +94,6 @@ fun AlbumItem(
                 onToggle = { onFavoriteToggle(album) },
             )
         }
-    }
-}
-
-@Composable
-private fun FavoriteButton(
-    favorite: Boolean,
-    onToggle: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    IconButton(
-        onClick = onToggle,
-        modifier = modifier.size(48.dp),
-    ) {
-        Icon(
-            imageVector = if (favorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-            contentDescription = stringResource(
-                if (favorite) R.string.remove_from_favorites else R.string.add_to_favorites
-            ),
-            tint = if (favorite) SparkTheme.colors.accent else SparkTheme.colors.neutral,
-        )
     }
 }
 
