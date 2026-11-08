@@ -74,8 +74,8 @@ private class FakeAlbumDao : AlbumDao {
         this.albums.value = albums
     }
 
-    override suspend fun insertFavorite(albumId: FavoriteEntity) {
-        favorites.value = favorites.value + albumId.albumId
+    override suspend fun insertFavorite(favorite: FavoriteEntity) {
+        favorites.value = favorites.value + favorite.albumId
     }
 
     override suspend fun deleteFavorite(albumId: Int) {
