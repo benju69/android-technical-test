@@ -29,7 +29,11 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 shrinking: smaller dex + resource shrinking; the libraries
+            // in use (Hilt, Room, Retrofit, OkHttp, kotlinx.serialization)
+            // ship their own consumer keep rules
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

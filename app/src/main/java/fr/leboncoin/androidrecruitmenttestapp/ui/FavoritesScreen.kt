@@ -68,6 +68,7 @@ fun FavoritesContent(
             items(
                 items = favorites,
                 key = { album -> album.id },
+                contentType = { "album_item" },
             ) { album ->
                 AlbumItem(
                     album = album,

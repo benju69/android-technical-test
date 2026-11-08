@@ -85,6 +85,7 @@ private fun AlbumsContent(
         items(
             items = albums,
             key = { album -> album.id },
+            contentType = { "album_item" },
         ) { album ->
             AlbumItem(
                 album = album,

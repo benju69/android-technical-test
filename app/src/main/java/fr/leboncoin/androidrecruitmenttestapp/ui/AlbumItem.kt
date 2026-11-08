@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package fr.leboncoin.androidrecruitmenttestapp.ui
 
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -47,8 +50,12 @@ fun AlbumItem(
         onClick = { onItemSelected(album) },
     ) {
         Row {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
+            // ImageRequest memoized by album: the favorites toggle and any
+            // other recomposition of the item must not rebuild the request
+            // nor restart the image pipeline
+            val context = LocalContext.current
+            val thumbnailRequest = remember(album) {
+                ImageRequest.Builder(context)
                     .data(album.thumbnailUrl)
                     .httpHeaders(
                         NetworkHeaders.Builder()
@@ -56,7 +63,11 @@ fun AlbumItem(
                             .build()
                     )
                     .crossfade(true)
-                    .build(),
+                    .build()
+            }
+
+            AsyncImage(
+                model = thumbnailRequest,
                 contentDescription = album.title,
                 modifier = Modifier
                     .sharedImageElement(imageSharedKey)

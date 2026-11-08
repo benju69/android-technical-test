@@ -15,7 +15,7 @@ module `:data`.
 1. [Injection de dépendances : Hilt](#1-injection-de-dépendances--hilt)
 2. [Architecture par couches (MVVM + Repository)](#2-architecture-par-couches) — *à venir*
 3. [Persistance offline : Room](#3-persistance-offline--room)
-4. [Navigation](#4-navigation) — *à venir*
+4. [Navigation](#4-navigation)
 5. [Réseau : Retrofit + kotlinx-serialization](#5-réseau) — *à venir*
 6. [UI : Compose + Spark design system](#6-ui) — *à venir*
 7. [Tests](#7-tests) — *à venir*
@@ -308,3 +308,45 @@ L'application est passée à **une seule Activity + Navigation Compose** :
 - Analytics : `trackScreenView` suit désormais la destination courante via
   `LaunchedEffect(route)` en un seul endroit, là où les deux Activities le
   faisaient chacune dans `onCreate`.
+
+### 4.4 Rotation, changements de configuration, process death
+
+*(critère éliminatoire de l'énoncé)*
+
+- **Aucun `configChanges` ni `screenOrientation` dans le manifest** : on
+  laisse le système recréer l'Activity, aucune "astuce" de maintien d'UI.
+- **Les ViewModels survivent à la rotation** : ils vivent dans le
+  `ViewModelStore` de leur `NavBackStackEntry` (navigation) / Activity, pas
+  dans la composition. Le flag `refreshFailed` et l'état des flux
+  (`stateIn(WhileSubscribed(5s))`) sont donc conservés : pas de re-fetch au
+  simple fait de tourner l'écran.
+- **Le contenu UI suit le viewport** : rien n'est codé "portrait" — les
+  listes sont des `LazyColumn`, l'app bar et la bottom bar sont pilotées par
+  les insets, et l'image du détail est bornée (`widthIn(max)`/`heightIn(max)`
+  = 350, letterboxée en `Fit`) pour ne jamais occuper l'intégralité d'un
+  viewport paysage plus bas.
+- **L'état d'UI détaillé** (position de scroll des listes, items clés par
+  id) est restauré par Compose via `rememberSaveable`/le registre de
+  sauvegarde de la navigation.
+- **Process death** : l'id de l'album du détail est lu dans
+  `SavedStateHandle` (§4.1) et les arguments de navigation sont persistés
+  par le NavController ; si le processus est tué par l'OS puis relancé,
+  l'id est restauré et l'album est rechargé depuis Room.
+
+### 4.5 Performance
+
+- **Build release R8** : `isMinifyEnabled` + `isShrinkResources = true` ;
+  APK 19 Mo (debug) → **2,9 Mo** (release) après minification, sans règle
+  `keep` custom (les libs fournissent leurs règles consumer). Un `assembleRelease`
+  fait partie des checks du livrable.
+- **Listes** : `LazyColumn` avec `key` *et* `contentType` sur les items —
+  l'identification et la réutilisation des composables sont corrects ; la
+  requête d'item image est mémoïsée (`ImageRequest` via `remember(album)`)
+  pour ne pas relancer le pipeline Coil à chaque recomposition (toggle
+  favori, scroll).
+- **Images** : Coil 3 gère mémoire + disque ; requêtes dimensionnées par
+  les contraintes `aspectRatio`/`heightIn` (pas de décodage plus grand que
+  l'affichage), UA header commun à toutes les requêtes.
+- **Flows** : `SharingStarted.WhileSubscribed(5_000)` — l'observation Room
+  est stoppée en arrière-plan (aucune re-query UI invisible), chaque
+  émission se limite aux diff Room.
