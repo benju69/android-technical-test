@@ -3,7 +3,6 @@ package fr.leboncoin.androidrecruitmenttestapp.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,47 +19,51 @@ import com.adevinta.spark.SparkTheme
 import com.adevinta.spark.components.buttons.Button
 import com.adevinta.spark.components.buttons.Primary
 import com.adevinta.spark.components.progress.Spinner
-import com.adevinta.spark.components.scaffold.Scaffold
 import com.adevinta.spark.components.text.Text
 import fr.leboncoin.androidrecruitmenttestapp.AlbumsUiState
 import fr.leboncoin.androidrecruitmenttestapp.AlbumsViewModel
 import fr.leboncoin.androidrecruitmenttestapp.R
 import fr.leboncoin.data.model.Album
 
+/**
+ * Albums tab content. Under the single-activity shell (MainActivity owns the
+ * top/bottom bars and their padding), this screen no longer nests a
+ * Scaffold — a nested level would otherwise re-apply the status-bar inset
+ * the shell's app bar already placed.
+ */
 @Composable
 fun AlbumsScreen(
     viewModel: AlbumsViewModel,
     onItemSelected: (Album) -> Unit,
     modifier: Modifier = Modifier,
+    /** Prefix of the shared-element key of thumbnails (source tab name). */
+    sharedKeyPrefix: String? = null,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Scaffold(modifier = modifier) { paddingValues ->
-        when (val state = uiState) {
-            is AlbumsUiState.Loading -> AlbumsLoading(paddingValues = paddingValues)
+    when (val state = uiState) {
+        is AlbumsUiState.Loading -> AlbumsLoading(modifier = modifier)
 
-            is AlbumsUiState.Success -> AlbumsContent(
-                albums = state.albums,
-                onItemSelected = onItemSelected,
-                onFavoriteToggle = viewModel::toggleFavorite,
-                contentPadding = paddingValues,
-            )
+        is AlbumsUiState.Success -> AlbumsContent(
+            albums = state.albums,
+            onItemSelected = onItemSelected,
+            onFavoriteToggle = viewModel::toggleFavorite,
+            sharedKeyPrefix = sharedKeyPrefix,
+            modifier = modifier,
+        )
 
-            is AlbumsUiState.Error -> AlbumsError(
-                message = stringResource(R.string.albums_error, state.message),
-                onRetry = viewModel::loadAlbums,
-                paddingValues = paddingValues,
-            )
-        }
+        is AlbumsUiState.Error -> AlbumsError(
+            message = stringResource(R.string.albums_error, state.message),
+            onRetry = viewModel::loadAlbums,
+            modifier = modifier,
+        )
     }
 }
 
 @Composable
-private fun AlbumsLoading(paddingValues: PaddingValues, modifier: Modifier = Modifier) {
+private fun AlbumsLoading(modifier: Modifier = Modifier) {
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(paddingValues),
+        modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
         Spinner()
@@ -72,13 +75,12 @@ private fun AlbumsContent(
     albums: List<Album>,
     onItemSelected: (Album) -> Unit,
     onFavoriteToggle: (Album) -> Unit,
-    contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
+    sharedKeyPrefix: String? = null,
 ) {
     LazyColumn(
-        modifier = modifier,
+        modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = contentPadding,
     ) {
         items(
             items = albums,
@@ -88,6 +90,7 @@ private fun AlbumsContent(
                 album = album,
                 onItemSelected = onItemSelected,
                 onFavoriteToggle = onFavoriteToggle,
+                imageSharedKey = sharedKeyPrefix?.let { "$it-${album.id}" },
             )
         }
     }
@@ -97,13 +100,10 @@ private fun AlbumsContent(
 private fun AlbumsError(
     message: String,
     onRetry: () -> Unit,
-    paddingValues: PaddingValues,
     modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(paddingValues),
+        modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -120,7 +120,7 @@ private fun AlbumsError(
 @Composable
 private fun AlbumsLoadingPreview() {
     SparkTheme {
-        AlbumsLoading(paddingValues = PaddingValues(16.dp))
+        AlbumsLoading()
     }
 }
 
@@ -159,7 +159,7 @@ private fun AlbumsContentPreview() {
             albums = sampleAlbums,
             onItemSelected = {},
             onFavoriteToggle = {},
-            contentPadding = PaddingValues(16.dp),
+            modifier = Modifier.padding(16.dp),
         )
     }
 }
@@ -171,7 +171,6 @@ private fun AlbumsErrorPreview() {
         AlbumsError(
             message = "Failed to load albums",
             onRetry = {},
-            paddingValues = PaddingValues(16.dp),
         )
     }
 }

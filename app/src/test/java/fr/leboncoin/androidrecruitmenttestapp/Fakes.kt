@@ -56,6 +56,11 @@ class FakeAlbumDao : AlbumDao {
             data.find { it.id == id }?.let { AlbumWithFavorite(album = it, favorite = it.id in favs) }
         }
 
+    override fun observeFavorites(): Flow<List<AlbumWithFavorite>> =
+        combine(albums, favorites) { data, favs ->
+            data.filter { it.id in favs }.map { AlbumWithFavorite(album = it, favorite = true) }
+        }
+
     override suspend fun insertAll(albums: List<AlbumEntity>) {
         this.albums.value = albums
     }

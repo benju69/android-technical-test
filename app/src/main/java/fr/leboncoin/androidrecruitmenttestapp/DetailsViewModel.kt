@@ -25,7 +25,7 @@ class DetailsViewModel @Inject constructor(
     private val repository: AlbumRepository,
 ) : ViewModel() {
 
-    val albumId: Int = checkNotNull(savedStateHandle[DetailsActivity.ALBUM_ID_KEY])
+    val albumId: Int = checkNotNull(savedStateHandle[Routes.ALBUM_ID_ARG])
 
     val album: StateFlow<Album?> = repository.observeAlbum(albumId)
         .stateIn(

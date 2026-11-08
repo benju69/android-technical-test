@@ -21,6 +21,13 @@ interface AlbumDao {
     )
     fun observeAlbum(id: Int): Flow<AlbumWithFavorite?>
 
+    /** Favorite-only variant (inner join): feeds the Favorites tab. */
+    @Query(
+        "SELECT a.*, EXISTS(SELECT 1 FROM favorites f WHERE f.albumId = a.id) AS favorite " +
+            "FROM albums a JOIN favorites fav ON fav.albumId = a.id ORDER BY a.id"
+    )
+    fun observeFavorites(): Flow<List<AlbumWithFavorite>>
+
     /**
      * Cache the network response. REPLACE keeps the albums table in sync with
      * the source; favorites are unaffected (separate table).

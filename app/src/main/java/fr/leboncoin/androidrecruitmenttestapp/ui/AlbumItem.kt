@@ -36,6 +36,8 @@ fun AlbumItem(
     onItemSelected: (Album) -> Unit,
     onFavoriteToggle: (Album) -> Unit,
     modifier: Modifier = Modifier,
+    /** Key binding this thumbnail to the detail image in a shared-element transition. */
+    imageSharedKey: String? = null,
 ) {
     Card(
         modifier = modifier
@@ -57,6 +59,7 @@ fun AlbumItem(
                     .build(),
                 contentDescription = album.title,
                 modifier = Modifier
+                    .sharedImageElement(imageSharedKey)
                     .fillMaxHeight()
                     .aspectRatio(1f),
                 contentScale = ContentScale.Crop

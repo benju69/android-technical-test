@@ -251,7 +251,7 @@ courante) :
 | Changements de configuration | L'extra survit à la rotation (pas de crash), mais l'objet reste figé | Survit aussi (l'extra est conservé), et l'état est récupéré à chaud |
 | **Process death** (éliminatoire) | L'extra d'Intent est restauré par le système — l'objet survit | L'id est restauré via `SavedStateHandle`, contenu rechargé depuis la base |
 | Couplage | Le modèle domaine deviendrait `android.os.Parcelable` (+ plugin `kotlin-parcelize` dans `:data`, ce qui casse la neutralité Android de la couche domaine) | Modèle domaine pur ; la base reste la seule source de vérité |
-| Extension Navigation Compose | Il faudrait re-sérialiser l'objet en argument de route | Le pattern est déjà correct : l'argument de route EST un id (cf. §9) |
+| Extension Navigation Compose | Re-sérialiser l'objet pour un argument de route | Le pattern est déjà correct : l'argument de route EST un id (fait en §4.3) |
 
 En pratique : `DetailsViewModel` lit l'id dans
 `SavedStateHandle[ALBUM_ID_KEY]` (injecté automatiquement par Hilt dans le
@@ -264,17 +264,47 @@ crasher systématiquement ».
 
 ### 4.2 Conception d'écran
 
-`DetailsActivity` reste un composant minuscule : field injection analytics +
-`viewModels()`, collection `collectAsStateWithLifecycle`, et délégation
-totale à `DetailsScreen` (stateless, préviewable, testable sans activity). Le
-bouton cœur (`FavoriteButton`) est **partagé** entre la liste et le détail
-(`ui/FavoriteButton.kt`) : même interaction, mêmes strings
-d'accessibilité, un seul endroit à faire évoluer.
+Le bouton cœur (`FavoriteButton`) est **partagé** entre la liste et le détail
+(`ui/FavoriteButton.kt`) : même interaction, mêmes strings d'accessibilité,
+un seul endroit à faire évoluer. Les écrans sont stateless et préviewables,
+testables sans activity.
 
-### 4.3 Bout du chemin déjà documenté
+### 4.3 Single-activity + Navigation Compose
 
-Le passage à **Navigation Compose (single-activity)** est prévu au §9 : il
-consistera essentiellement à remplacer la paire d'Activities par un NavHost
-dont l'argument de route est… ce même id. Les ViewModels
-(`@HiltViewModel` avec `SavedStateHandle` déjà branché) ne changent pas :
-c'est la preuve que les couches de routage et d'état sont découplées.
+L'application est passée à **une seule Activity + Navigation Compose** :
+
+- `MainActivity` héberge un `NavHost` avec trois destinations : `albums`,
+  `favorites` et `album/{albumId}` (objet `Routes`). `DetailsActivity` a
+  disparu — l'argument de route `albumId: Int` (`NavType.IntType`) remplace
+  l'extra d'Intent, la migration a **conservé la clé SavedStateHandle** :
+  `DetailsViewModel` ne change pas d'une ligne, preuve que couche de routage
+  et couche d'état sont découplées.
+- Les ViewModels sont scopés **par destination** (`androidx.hilt:
+  hilt-navigation-compose` → `hiltViewModel()` dans le composable) au lieu
+  d'être activity-scoped, et la navigation entre onglets utilise
+  `popUpTo(inclusive) + saveState/restoreState + launchSingleTop` : la pile
+  ne porte que l'onglet courant (Back sur un onglet quitte l'app au lieu de
+  rebondir vers l'autre onglet), et changer d'onglet conserve son état
+  (défilement, favoris) sans dupliquer les VM.
+- **Une seule app bar visible partout** : la top bar du shell suit la
+  destination (titre "Albums"/"Favorites"/"Album details") et porte la
+  flèche Back + le cœur favori sur le détail (état lu dans le
+  `DetailsViewModel` du même back-stack entry). Pas de masquage/apparition
+  de barre à l'ouverture du détail, et une seule barre… donc pas de double
+  app bar. La bottom bar (Spark `NavigationBar`, items "Albums" /
+  "Favorites") n'apparaît que sur les destinations top-level. Le
+  `PaddingValues` du shell est appliqué à chaque écran de contenu — les
+  insets ne sont consommés qu'une fois (pas de double marge statut-bar).
+- **Transitions** : fondu entre onglets, glissement latéral vers/depuis le
+  détail, et **shared element** sur l'image (thumbnail → image du détail,
+  `SharedTransitionLayout` + CompositionLocals). La clé inclut l'onglet
+  source (`albums-42` vs `favorites-42`, argument `?src=`) pour qu'aucun
+  doublon ne matche pendant les transitions entre onglets.
+- `FavoritesViewModel` observe la variante "favoris uniquement" de la query
+  Room (`observeFavorites()` : inner join sur `favorites`) : togglée depuis
+  la liste ou le détail, la rupture de favori se propage instantanément à
+  l'onglet ; un état vide (rien de favori) est un état valide, couvert par
+  une vue vide dédiée.
+- Analytics : `trackScreenView` suit désormais la destination courante via
+  `LaunchedEffect(route)` en un seul endroit, là où les deux Activities le
+  faisaient chacune dans `onCreate`.

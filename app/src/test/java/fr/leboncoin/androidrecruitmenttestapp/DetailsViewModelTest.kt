@@ -43,7 +43,7 @@ class DetailsViewModelTest {
     }
 
     private fun createViewModel(id: Int) = DetailsViewModel(
-        savedStateHandle = SavedStateHandle(mapOf(DetailsActivity.ALBUM_ID_KEY to id)),
+        savedStateHandle = SavedStateHandle(mapOf(Routes.ALBUM_ID_ARG to id)),
         repository = AlbumRepository(service, dao),
     )
 
