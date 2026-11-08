@@ -51,6 +51,11 @@ android {
         implementation(libs.hilt.android)
         ksp(libs.hilt.compiler)
 
+        // Room (offline persistence)
+        implementation(libs.room.runtime)
+        implementation(libs.room.ktx)
+        ksp(libs.room.compiler)
+
         testImplementation(libs.junit)
         androidTestImplementation(libs.androidx.junit) // Useless dependency
         androidTestImplementation(libs.androidx.espresso.core) // Useless dependency
