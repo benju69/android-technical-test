@@ -61,8 +61,8 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
-    // Favorite icons
-    implementation(libs.androidx.material.icons.core)
+    // Material icons dep removed: all app glyphs now come from the Spark
+    // LeboncoinIcons set (bottom bar, favorite heart, top-bar back arrow)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

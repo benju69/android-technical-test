@@ -13,8 +13,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -22,8 +20,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavBackStackEntry
@@ -45,6 +45,8 @@ import com.adevinta.spark.components.icons.Icon
 import com.adevinta.spark.components.icons.IconButton
 import com.adevinta.spark.components.scaffold.Scaffold
 import com.adevinta.spark.components.text.Text
+import com.adevinta.spark.icons.ArrowLeft
+import com.adevinta.spark.icons.ArrowRight
 import com.adevinta.spark.icons.HeartOutline
 import com.adevinta.spark.icons.ImageOutline
 import com.adevinta.spark.icons.LeboncoinIcons
@@ -265,7 +267,15 @@ private fun MainTopBar(
             if (currentRoute == Routes.ALBUM_DETAIL) {
                 IconButton(onClick = onBackClick) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        // Spark icons are fixed-direction drawables (no RTL
+                        // auto-mirroring like the Material AutoMirrored icon
+                        // that was here before) — pick the glyph per layout
+                        // direction so RTL users still get a "back" arrow.
+                        sparkIcon = if (LocalLayoutDirection.current == LayoutDirection.Ltr) {
+                            LeboncoinIcons.ArrowLeft
+                        } else {
+                            LeboncoinIcons.ArrowRight
+                        },
                         contentDescription = stringResource(R.string.navigate_back),
                         tint = SparkTheme.colors.main
                     )
