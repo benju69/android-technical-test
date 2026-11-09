@@ -1,4 +1,4 @@
-package fr.leboncoin.androidrecruitmenttestapp
+package fr.leboncoin.androidrecruitmenttestapp.feature.albums
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

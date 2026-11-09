@@ -1,7 +1,11 @@
-package fr.leboncoin.androidrecruitmenttestapp
+package fr.leboncoin.androidrecruitmenttestapp.feature.detail
 
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
+import fr.leboncoin.androidrecruitmenttestapp.FakeAlbumApiService
+import fr.leboncoin.androidrecruitmenttestapp.FakeAlbumDao
+import fr.leboncoin.androidrecruitmenttestapp.Routes
+import fr.leboncoin.androidrecruitmenttestapp.sampleDto
 import fr.leboncoin.data.mapper.toEntity
 import fr.leboncoin.data.repository.AlbumRepository
 import kotlinx.coroutines.Dispatchers

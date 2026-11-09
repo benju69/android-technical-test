@@ -11,4 +11,14 @@
     <string name="tab_albums">Albums</string>
     <string name="tab_favorites">Favorites</string>
     <string name="favorites_empty">No favorites yet</string>
+
+    <!-- Id chips (list items + detail) -->
+    <string name="album_number">Album #%1$d</string>
+    <string name="track_number">Track #%1$d</string>
+
+    <!-- Favorites tab -->
+    <plurals name="favorites_count">
+        <item quantity="one">%1$d favorite</item>
+        <item quantity="other">%1$d favorites</item>
+    </plurals>
 </resources>

@@ -1,4 +1,4 @@
-package fr.leboncoin.androidrecruitmenttestapp.ui
+package fr.leboncoin.androidrecruitmenttestapp.feature.detail
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,6 +28,7 @@ import com.adevinta.spark.SparkTheme
 import com.adevinta.spark.components.chips.ChipTinted
 import com.adevinta.spark.components.text.Text
 import fr.leboncoin.androidrecruitmenttestapp.R
+import fr.leboncoin.androidrecruitmenttestapp.ui.sharedImageElement
 import fr.leboncoin.data.model.Album
 
 /**
@@ -93,10 +94,10 @@ fun DetailsScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 ChipTinted(
-                    text = "Album #${album.albumId}"
+                    text = stringResource(R.string.album_number, album.albumId)
                 )
                 ChipTinted(
-                    text = "Track #${album.id}"
+                    text = stringResource(R.string.track_number, album.id)
                 )
             }
 

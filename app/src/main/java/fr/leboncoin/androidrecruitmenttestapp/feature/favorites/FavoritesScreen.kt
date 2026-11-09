@@ -1,7 +1,8 @@
-package fr.leboncoin.androidrecruitmenttestapp.ui
+package fr.leboncoin.androidrecruitmenttestapp.feature.favorites
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,14 +11,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.adevinta.spark.SparkTheme
 import com.adevinta.spark.components.text.Text
-import fr.leboncoin.androidrecruitmenttestapp.FavoritesViewModel
 import fr.leboncoin.androidrecruitmenttestapp.R
+import fr.leboncoin.androidrecruitmenttestapp.ui.AlbumItem
 import fr.leboncoin.data.model.Album
 
 /**
@@ -61,21 +63,35 @@ fun FavoritesContent(
             Text(text = stringResource(R.string.favorites_empty))
         }
     } else {
-        LazyColumn(
-            modifier = modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            items(
-                items = favorites,
-                key = { album -> album.id },
-                contentType = { "album_item" },
-            ) { album ->
-                AlbumItem(
-                    album = album,
-                    onItemSelected = onItemSelected,
-                    onFavoriteToggle = onFavoriteToggle,
-                    imageSharedKey = sharedKeyPrefix?.let { "$it-${album.id}" },
-                )
+        Column(modifier = modifier.fillMaxSize()) {
+            // Count is the one place a quantity matters: proper singular/plural
+            // handling ("1 favorite" / "3 favorites") via plurals resources.
+            Text(
+                text = pluralStringResource(
+                    R.plurals.favorites_count,
+                    favorites.size,
+                    favorites.size,
+                ),
+                style = SparkTheme.typography.caption,
+                modifier = Modifier.padding(vertical = 8.dp, horizontal = 16.dp),
+            )
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                items(
+                    items = favorites,
+                    key = { album -> album.id },
+                    contentType = { "album_item" },
+                ) { album ->
+                    AlbumItem(
+                        album = album,
+                        onItemSelected = onItemSelected,
+                        onFavoriteToggle = onFavoriteToggle,
+                        imageSharedKey = sharedKeyPrefix?.let { "$it-${album.id}" },
+                    )
+                }
             }
         }
     }

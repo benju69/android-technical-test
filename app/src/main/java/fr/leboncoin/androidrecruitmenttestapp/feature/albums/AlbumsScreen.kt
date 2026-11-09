@@ -1,4 +1,4 @@
-package fr.leboncoin.androidrecruitmenttestapp.ui
+package fr.leboncoin.androidrecruitmenttestapp.feature.albums
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,9 +20,8 @@ import com.adevinta.spark.components.buttons.Button
 import com.adevinta.spark.components.buttons.Primary
 import com.adevinta.spark.components.progress.Spinner
 import com.adevinta.spark.components.text.Text
-import fr.leboncoin.androidrecruitmenttestapp.AlbumsUiState
-import fr.leboncoin.androidrecruitmenttestapp.AlbumsViewModel
 import fr.leboncoin.androidrecruitmenttestapp.R
+import fr.leboncoin.androidrecruitmenttestapp.ui.AlbumItem
 import fr.leboncoin.data.model.Album
 
 /**

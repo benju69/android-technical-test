@@ -47,6 +47,11 @@ android {
     buildFeatures {
         compose = true
     }
+    androidResources {
+        // Keep only the locales the app actually ships: smaller APK,
+        // and localeConfig stays truthful
+        localeFilters += listOf("en", "fr")
+    }
 }
 
 dependencies {
@@ -76,11 +81,6 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.turbine)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
-    debugImplementation(libs.androidx.ui.test.manifest)
     debugImplementation(libs.leakcanary.android)
 }

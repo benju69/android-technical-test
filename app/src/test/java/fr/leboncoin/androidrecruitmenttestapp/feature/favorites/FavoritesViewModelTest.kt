@@ -1,6 +1,9 @@
-package fr.leboncoin.androidrecruitmenttestapp
+package fr.leboncoin.androidrecruitmenttestapp.feature.favorites
 
 import app.cash.turbine.test
+import fr.leboncoin.androidrecruitmenttestapp.FakeAlbumApiService
+import fr.leboncoin.androidrecruitmenttestapp.FakeAlbumDao
+import fr.leboncoin.androidrecruitmenttestapp.sampleDto
 import fr.leboncoin.data.database.FavoriteEntity
 import fr.leboncoin.data.mapper.toEntity
 import fr.leboncoin.data.model.Album

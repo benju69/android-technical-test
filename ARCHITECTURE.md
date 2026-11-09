@@ -13,14 +13,14 @@ module `:data`.
 ## Sommaire
 
 1. [Injection de dépendances : Hilt](#1-injection-de-dépendances--hilt)
-2. [Architecture par couches (MVVM + Repository)](#2-architecture-par-couches) — *à venir*
+2. [Architecture par couches (MVVM + Repository)](#2-architecture-par-couches)
 3. [Persistance offline : Room](#3-persistance-offline--room)
 4. [Navigation](#4-navigation)
-5. [Réseau : Retrofit + kotlinx-serialization](#5-réseau) — *à venir*
-6. [UI : Compose + Spark design system](#6-ui) — *à venir*
-7. [Tests](#7-tests) — *à venir*
-8. [Bugs trouvés & corrigés](#8-bugs-trouvés--corrigés) — *à venir*
-9. [Planification des évolutions](#9-planification-des-évolutions) — *à venir*
+5. [Réseau : Retrofit + kotlinx-serialization](#5-réseau)
+6. [UI : Compose + Spark design system](#6-ui)
+7. [Tests](#7-tests)
+8. [Bugs trouvés & corrigés](#8-bugs-trouvés--corrigés)
+9. [Planification des évolutions](#9-planification-des-évolutions)
 
 ---
 
@@ -84,8 +84,8 @@ réseau `DataModule` (`@Module @InstallIn(SingletonComponent)`) qui fournit
 par **injection de constructeur** (`@Inject constructor`) : pas besoin de
 `@Provides` "à la main", Hilt construit la classe dès que toutes ses
 dépendances sont dans le graphe — la notation standard pour ce genre d'objet.
-La description détaillée du module `:data` viendra avec sa refonte
-(§2 Architecture par couches).
+La description détaillée du module `:data` figure au §2 (Architecture par
+couches).
 
 #### Côté consommateurs
 
@@ -137,6 +137,78 @@ La description détaillée du module `:data` viendra avec sa refonte
 
 ---
 
+## 2. Architecture par couches (MVVM + Repository)
+
+### 2.1 La carte
+
+```
+┌─────────────────── app : application module ───────────────┐
+│  racine = le shell : MainActivity (NavHost, barres),       │
+│                     Routes, PhotoApp, analytics            │
+│                                                            │
+│  feature/albums    AlbumsScreen + AlbumsViewModel          │
+│                    (+ AlbumsUiState dérivé)                │
+│  feature/favorites FavoritesScreen + FavoritesViewModel    │
+│  feature/detail    DetailsScreen + DetailsViewModel        │
+│                                                            │
+│  ui/               composables PARTAGÉS entre features :   │
+│                     AlbumItem (les 2 onglets),             │
+│                     FavoriteButton (liste + détail),       │
+│                     shared elements, theme/                │
+└──────────────────────┬─────────────────────────────────────┘
+                       │ Album, AlbumRepository   (SEULE surface exposée)
+┌──────────────────────▼───────── data : Android library ───┐
+│  repository/ (AlbumRepository — offline-first)             │
+│  network/ (Retrofit service + DTO)      database/ (Room)   │
+│  mapper/ (DTO↔Entity↔domain)            di/ (graph Hilt)   │
+│  model/ (Album — modèle domaine, 1 champ `favorite`)       │
+└────────────────────────────────────────────────────────────┘
+```
+
+Chaque feature package est **cohésif par destination** : l'écran, son
+ViewModel et son état UI y vivent côte à côte — lire une fonctionnalité ne
+demande pas de sauter d'un dossier `viewmodel/` à un dossier `ui/`, et en
+extraire un module Gradle plus tard sera un déplacement, pas une
+réécriture. Les tests JVM miroient cette arborescence
+(`test/.../feature/albums/AlbumsViewModelTest` etc.), et `Fakes.kt` reste
+au package racine des tests car il est partagé par les trois suites.
+
+### 2.2 Les règles de dépendance
+
+- `:data` **ne connaît ni Compose, ni UI** : aucune dépendance UI dans son
+  classpath (vérifiable dans `data/build.gradle.kts` : Retrofit, OkHttp,
+  Room, Hilt, kotlinx-serialization seulement).
+- `:app` **ne touche que deux types de `:data`** (`Album`,
+  `AlbumRepository` — plus les mappers en tests). Ni `AlbumDao`, ni
+  `AlbumEntity`, ni `AlbumDto` ne fuient dans la couche UI : impossible
+  d'écrire une requête SQL ou un parse JSON depuis un ViewModel par
+  accident (assuré par `implementation` et non `api` dans le catalog).
+- Sens unique : `:app` → `:data` ; `:data` → Retrofit/Room/Hilt. Les events
+  montent (ViewModel appelle `AlbumRepository.toggleFavorite`), le state
+  descend (StateFlow collecté à l'écran) — UDF.
+
+### 2.3 Pourquoi PAS davantage de modules (pour l'instant)
+
+Deux modules suffisent ici, et ce n'est pas de la flemme : chaque module
+doit être payé par un de ces critères :
+
+| Critère de rentabilité d'un module | Ici ? |
+|---|---|
+| Un 2e consumer réutilisable (2e app, wear) | non |
+| Frontières d'équipe (une module par feature team) | non |
+| Isolation de compilation pour de gros lots d'écrans (build times) | 6 écrans/composants |
+| Module JVM pur pour la testabilité du domaine | domaine = 1 data class + mappers |
+| Dynamic features / allègement Play Store | aucun |
+
+Le chemin d'évolution suit ce fil : **les features-first packages sont déjà
+en place** (`feature/albums`, `feature/favorites`, `feature/detail` — cf.
+§2.1) ; le saut suivant est le module Gradle, le jour où une de ces raisons
+existera vraiment. Découper les ViewModels dans un package `viewmodel/`
+(layer-first) aurait voulu l'inverse : un ViewModel séparé de son écran et
+de son état UI, chaque nouvelle feature éclatée sur 3 dossiers.
+
+
+---
 
 ## 3. Persistance offline : Room
 
@@ -353,6 +425,73 @@ L'application est passée à **une seule Activity + Navigation Compose** :
 
 ---
 
+## 5. Réseau : Retrofit + kotlinx-serialization
+
+Le graphe réseau vit entièrement dans `DataModule` (`:data`), installé dans
+le scope singleton Hilt :
+
+- **Retrofit 3 + convertisseur kotlinx-serialization** (Jakewharton
+  `retrofit2-kotlinx-serialization-converter`) : parsing sans réflexion,
+  `Json { ignoreUnknownKeys = true; coerceInputValues = true }` pour tolérer
+  l'évolution du payload sans crash (champ ajouté, supprimé, type null
+  inattendu). La `BASE_URL` (fichier JSON statique de l'énoncé) vit dans
+  l'interface `AlbumApiService`.
+- **OkHttp** : `HttpLoggingInterceptor` niveau `BODY` — activé uniquement en
+  debug (`BuildConfig.DEBUG`), aucun log de payload en release.
+- **DTO = seule représentation réseau** : `AlbumDto` vit dans `:data` et
+  n'est jamais exposé à l'UI (§2.2). Le mapping DTO → Entity → domaine est
+  trivialement testable (§7).
+- **Stratégie d'erreur** : aucune transformation silencieuse côté data —
+  `refresh()` laisse l'exception remonter et c'est au ViewModel de décider
+  (état dérivé, cf. §7.1). Timeouts et reconnect restent les défauts OkHttp,
+  suffisants pour ce périmètre ; une évolution possible est au §9.
+- **Images (Coil 3)** : la même base réseau sert les images via Coil avec
+  un `User-Agent` d'application (`LeboncoinApp/1.0`) posé sur chaque
+  `ImageRequest`, plutôt que la valeur par défaut du loader — cf. §6, et
+  l'entrée 6 du catalogue §8.
+
+## 6. UI : Compose + Spark design system
+
+- **Spark 4.3.1 (design system Adevinta)** : composants (cards, chips,
+  top bar, navigation bar), typographie et tokens de couleur. Points
+  d'attention écosystème documentés au §8 : icônes renommées entre 1.x et
+  4.x (`SparkIcons` → `LeboncoinIcons`), et dark mode non automatique.
+- **`AppTheme`** : wrapper du thème Spark qui synchronise le jeu de couleurs
+  avec `isAppearanceLightStatusBars` / `isAppearanceLightNavigationBars` —
+  sinon les icônes système restent blanches sur fond clair en mode nuit
+  (entrée 4 du §8).
+- **Un seul shell** : un unique `Scaffold` dans `MainActivity` porte la top
+  bar (titre par destination, flèche retour + favori sur le détail) et la
+  bottom bar (2 onglets). Il fournit le `PaddingValues` consommé par chaque
+  écran : les insets sont consommés une seule fois (entrée 9 du §8), aucun
+  Scaffold imbriqué.
+- **Écrans "content-only"** : `AlbumsScreen`, `FavoritesScreen`,
+  `DetailsScreen` ne sont que du contenu à état (`AlbumsUiState` etc.) —
+  sans barre propre, ils sont réutilisables en preview et testables tels
+  quels.
+- **Transitions** : cross-fade entre onglets (`tween(220)`), slide pour
+  l'entrée/sortie du détail (`tween(300)`), et **shared element** de la
+  vignette vers l'image du détail via un `SharedTransitionLayout` + deux
+  `CompositionLocal`s (helper `sharedImageElement`, cf. §4) : une transition
+  visuelle continue sans coupler les écrans à la navigation.
+- **Coil 3** : chargement mémoire + disque, requêtes construites une fois
+  par item (`remember(album)`) — une recomposition déclenchée par un toggle
+  favori ne relance pas le téléchargement d'image — et `contentType`
+  positionné sur les items des deux listes pour recycler efficacement.
+- **Accessibilité / textes** : `contentDescription` basés sur les ressources
+  `strings.xml`, pas de chaîne en dur ; états vides et d'erreur affichés
+  (favoris vide, erreur réseau avec bouton Retry).
+- **Localisation (EN par défaut + FR)** : toute chaîne UI vit dans
+  `strings.xml` — valeurs par défaut EN (`values/`), traduction FR
+  complète (`values-fr/`), format strings pour les chips d'id
+  (« Album n° %1$d », « Photo n° %1$d ») et pluriels `quantityString`
+  pour le compteur de favoris (« 1 favori » / « X favoris »). Côté
+  packaging : `android:localeConfig` (Android 13+ : l'utilisateur choisit
+  la langue de l'app indépendamment du système) et `localeFilters =
+  [en, fr]` (ressources épurées du reste).
+
+---
+
 ## 7. Tests
 
 ### 7.1 Ce qui est testé (18 tests, tous JVM, aucune dépendance mock externe)
@@ -390,3 +529,72 @@ L'application est passée à **une seule Activity + Navigation Compose** :
 La couverture ViewModel seule couvre aussi, par construction, la restauration
 de la configuration/process death (SavedStateHandle reconstruit avec les
 extras d'une Activity restaurée — cf. §4.4).
+
+---
+
+## 8. Bugs trouvés & corrigés
+
+Catalogue des pièges débusqués dans le skeleton et au fil du développement.
+Chaque entrée correspond à un vrai défaut observé, pas une hypothèse :
+
+| # | Bug / piège | Cause racine | Correctif |
+|---|---|---|---|
+| **Crash au 1er lancement sans réseau** (rejetatoire) | fetch bloquant au démarrage, exception non gérée | Offline-first : Room d'abord, UI à 3 états (§3, §7.1) |
+| **Favoris réinitialisés** à chaque refresh | `insertAll(REPLACE)` écrasait la table qui portait aussi le favori | Table `favorites` séparée, REPLACE ne touche que les albums (§3) |
+| **Album passé en extra de navigation** | modèle domaine couplé à Android (`Parcelable`) | Navigation par **id** + ré-observation Room via `SavedStateHandle` (§4) |
+| Icônes système blanches sur fond blanc en dark mode | Spark ne bascule pas seul les system bars | `AppTheme` synchronise couleurs + `isAppearanceLight*` (§6) |
+| **Fuite de Context** dans l'analytics | helper réassignait une Activity | Context applicatif injecté une fois (singleton) |
+| Images refusées par le CDN | `User-Agent` par défaut de Coil | Header `LeboncoinApp/1.0` sur chaque `ImageRequest` (§5) |
+| Top bar cachée/repliée à l'écran détail | l'écran pilotait sa propre barre | top bar permanente du shell, titre/actions par route (§4) |
+| Double marge de barre de statut | Scaffolds imbriqués consommant l'inset 2 fois | shell unique détenteur des insets (§6) |
+| Icône favori introuvable après montée de version Spark | renommage 1.x→4.x `SparkIcons`→`LeboncoinIcons` | migration vers la nouvelle API (§6) |
+| `hiltViewModel` déprécié | namespace déplacé (`androidx.hilt.lifecycle…`, 1.4.0) | import du nouveau namespace |
+| **Retry sans feedback** (bouton figé sur Error) | aucun état "requête en cours" | flag `refreshing` dans le reduce dérivé (§7.1) |
+| **Double-clic Retry → 2 requêtes** | pas de garde en entrée de `loadAlbums()` | retour anticipé si un load est en vol + test `callCount` |
+| `ImageRequest` reconstruit à chaque recomposition | builder inline dans le composable | `remember(album)` + `contentType` (§6) |
+| Conflits d'import material3 / spark après merge | mêmes noms de composables dans les deux | imports explicites reconciliés (`Card.Flat` Spark) |
+| Test "fantôme" sur StateFlow | un StateFlow partagé déduplique les valeurs égales | convention de test documentée (§7.2) |
+| Dépendances mortes du scaffold | `androidTest` inutilisé, `ExampleUnitTest`/`ExampleInstrumentedTest` | supprimés, classpath de test allégé |
+| Chips d'id « Album #x » / « Track #x » en dur | littéraux `String` dans les composables | format strings + traduction FR complète (`values-fr`), cf. §6 |
+
+---
+
+## 9. Planification des évolutions
+
+Feuille de route par priorité d'impact, critères de déclenchement inclus
+(chaque item démarre quand le besoin devient réel, pas avant) :
+
+**P0 — avant une mise en production**
+
+1. **Toggle favori atomique côté DAO** : le double-clic est couvert côté
+   refresh, mais deux toggles quasi simultanés (liste + détail) lisent puis
+   écrivent — un `UPDATE` SQL atomique (ou une requête toggle) supprimerait
+   la fenêtre de course.
+2. ~~**Localisation FR**~~ — **livré** : `values-fr` complète, format
+   strings pour les chips d'id, pluriels `quantityString` (compteur de
+   favoris), `localeConfig` + `localeFilters` (cf. §6). Reste éventuellement
+   un audit complet des pluriels/tailles de typographie sur d'autres locales
+   si l'app s'internationalise.
+3. **CI** (lint + tests JVM + assembleDebug/Release à chaque PR, cache
+   Gradle) : la base est déjà prête — builds verts, 18 tests 100 % JVM sans
+   émulateur.
+
+**P1 — court terme**
+
+4. **Tablet two-pane** : liste + détail côte à côte via `WindowSizeClass`,
+   le `NavHost` actuel sert de base (les écrans content-only s'y prêtent).
+5. **Tests instrumentés** ciblés : rotation et process death avec
+   `ActivityScenario.recreate()`, screenshots des 3 états (Loading/Error/
+   Success).
+6. **Pagination + recherche** : Room `PagingSource` si le catalogue grandit,
+   filtre par titre côté requête SQL (jamais en mémoire côté UI).
+
+**P2 — si l'app grossit**
+
+7. **Modularisation features-first** (cf. §2.3) : les packages
+   `feature/*` (déjà en place) deviennent des modules Gradle quand une
+   frontière d'équipe ou un temps de build le justifie.
+8. **Baseline Profile** + Macrobenchmark : démarrage et first-frame du
+   scroll (la liste image-heavy est le candidat naturel).
+9. **Refresh réglé** : `NetworkBoundResource` (stale-while-revalidate)
+   plutôt que le refresh unique, si l'API évolue en vraie ressource.

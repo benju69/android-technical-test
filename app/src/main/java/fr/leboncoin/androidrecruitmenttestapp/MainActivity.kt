@@ -49,10 +49,13 @@ import com.adevinta.spark.icons.HeartOutline
 import com.adevinta.spark.icons.ImageOutline
 import com.adevinta.spark.icons.LeboncoinIcons
 import dagger.hilt.android.AndroidEntryPoint
-import fr.leboncoin.androidrecruitmenttestapp.ui.AlbumsScreen
-import fr.leboncoin.androidrecruitmenttestapp.ui.DetailsScreen
+import fr.leboncoin.androidrecruitmenttestapp.feature.albums.AlbumsScreen
+import fr.leboncoin.androidrecruitmenttestapp.feature.albums.AlbumsViewModel
+import fr.leboncoin.androidrecruitmenttestapp.feature.detail.DetailsScreen
+import fr.leboncoin.androidrecruitmenttestapp.feature.detail.DetailsViewModel
+import fr.leboncoin.androidrecruitmenttestapp.feature.favorites.FavoritesScreen
+import fr.leboncoin.androidrecruitmenttestapp.feature.favorites.FavoritesViewModel
 import fr.leboncoin.androidrecruitmenttestapp.ui.FavoriteButton
-import fr.leboncoin.androidrecruitmenttestapp.ui.FavoritesScreen
 import fr.leboncoin.androidrecruitmenttestapp.ui.LocalNavAnimatedVisibilityScope
 import fr.leboncoin.androidrecruitmenttestapp.ui.LocalSharedTransitionScope
 import fr.leboncoin.androidrecruitmenttestapp.ui.theme.AppTheme
