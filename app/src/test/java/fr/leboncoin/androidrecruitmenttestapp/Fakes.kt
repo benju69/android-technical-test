@@ -11,6 +11,7 @@ import fr.leboncoin.data.network.model.AlbumDto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.delay
 
 // Sample data mirroring https://static.leboncoin.fr/img/shared/technical-test.json
 val sampleDto = listOf(
@@ -34,7 +35,19 @@ val sampleAlbums = sampleDto.map { it.toEntity().toAlbum(favorite = false) }
 class FakeAlbumApiService : AlbumApiService {
     var result: Result<List<AlbumDto>> = Result.success(emptyList())
 
-    override suspend fun getAlbums(): List<AlbumDto> = result.getOrThrow()
+    /** Virtual-time latency: lets tests observe the in-flight (Loading) window. */
+    var latencyMs: Long = 0L
+
+    var callCount: Int = 0
+        private set
+
+    override suspend fun getAlbums(): List<AlbumDto> {
+        callCount++
+        if (latencyMs > 0) {
+            delay(latencyMs)
+        }
+        return result.getOrThrow()
+    }
 }
 
 /**

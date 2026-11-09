@@ -57,7 +57,7 @@ android {
         ksp(libs.room.compiler)
 
         testImplementation(libs.junit)
-        androidTestImplementation(libs.androidx.junit) // Useless dependency
-        androidTestImplementation(libs.androidx.espresso.core) // Useless dependency
+        testImplementation(libs.coroutines.test)
+        testImplementation(libs.turbine)
     }
 }

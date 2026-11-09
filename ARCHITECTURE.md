@@ -350,3 +350,43 @@ L'application est passée à **une seule Activity + Navigation Compose** :
 - **Flows** : `SharingStarted.WhileSubscribed(5_000)` — l'observation Room
   est stoppée en arrière-plan (aucune re-query UI invisible), chaque
   émission se limite aux diff Room.
+
+---
+
+## 7. Tests
+
+### 7.1 Ce qui est testé (18 tests, tous JVM, aucune dépendance mock externe)
+
+| Suite | Fichier | Ce qu'elle couvre |
+|---|---|---|
+| `AlbumsViewModelTest` (6) | app | Loading→Success, erreur sans cache (jamais de crash), **cache servit même réseau coupé** (inverse : offline-first), retry **avec fenêtre Loading observée** + garde anti double-clic, aller-retour favori |
+| `DetailsViewModelTest` (3) | app | lecture par id, **id inconnu → null** (fallback, pas de crash), toggle favori |
+| `FavoritesViewModelTest` (3) | app | onglet vide initial (état valide), propagation des toggles, un-favori retiré |
+| `AlbumRepositoryTest` (6) | data | refresh → write-through cache, **échec réseau propagé sans toucher le cache**, mapping entité+favori → modèle domaine, lecture par id (connu/inconnu), contrat d'onglet favoris, **échec de refresh qui ne touche jamais les favoris** |
+
+### 7.2 Stratégie
+
+- **Fakes in-memory, pas de mocking framework** : `FakeAlbumApi`
+  (Result<>, succès/échec par test) et `FakeAlbumDao`/`InMemoryAlbumDao`
+  (deux collections, sémantique REPLACE) — on teste le **comportement
+  observable**, pas l'implémentation.
+- **TestDispatcher** (`Dispatchers.setMain`) + `advanceUntilIdle` : les
+  ViewModels tournent sur `viewModelScope` (Main.immediate) — chaque état
+  intermédiaire (Loading notamment) est observable explicitement.
+- **Turbine** pour observer les StateFlow/Flow : première émission = valeur
+  initiale, et piège documenté — un StateFlow partagé **déduplique** les
+  valeurs identiques (voir le test « id inconnu reste null »).
+- Les fakes atterrissent là où vit le code testé : les ViewModels (module
+  app) partagent `Fakes.kt`, la repository (module data) embarque ses
+  propres petites fakes in-memory — chaque module JVM-runnable sans émulateur.
+
+### 7.3 Lancer les tests
+
+```bash
+./gradlew :app:testDebugUnitTest :data:testDebugUnitTest   # 18 tests JVM
+./gradlew :app:assembleDebug :app:assembleRelease          # builds + R8
+```
+
+La couverture ViewModel seule couvre aussi, par construction, la restauration
+de la configuration/process death (SavedStateHandle reconstruit avec les
+extras d'une Activity restaurée — cf. §4.4).

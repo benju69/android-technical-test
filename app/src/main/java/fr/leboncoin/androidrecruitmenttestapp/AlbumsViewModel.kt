@@ -24,6 +24,15 @@ sealed interface AlbumsUiState {
  * only refreshes the cache (see [loadAlbums]); as long as the cache holds
  * albums the UI shows them, network failures are only ever surfaced when
  * there is nothing to display.
+ *
+ * The UI state is a pure reduction of three inputs (cache + two refresh
+ * flags) — the state is never "assigned imperatively", it always follows
+ * from whether there is content, a request in flight, or a failure:
+ *
+ *   albums.isNotEmpty() -> Success (the cache wins, even mid-refetch)
+ *   refreshing          -> Loading (first load AND retry in flight)
+ *   refreshFailed       -> Error (nothing displayed + last attempt failed)
+ *   else                -> Loading (initial)
  */
 @HiltViewModel
 class AlbumsViewModel @Inject constructor(
@@ -31,11 +40,13 @@ class AlbumsViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val refreshFailed = MutableStateFlow(false)
+    private val refreshing = MutableStateFlow(false)
 
     val uiState: StateFlow<AlbumsUiState> =
-        combine(repository.observeAlbums(), refreshFailed) { albums, failed ->
+        combine(repository.observeAlbums(), refreshFailed, refreshing) { albums, failed, refreshing ->
             when {
                 albums.isNotEmpty() -> AlbumsUiState.Success(albums)
+                refreshing -> AlbumsUiState.Loading
                 failed -> AlbumsUiState.Error("Failed to load albums")
                 else -> AlbumsUiState.Loading
             }
@@ -50,12 +61,18 @@ class AlbumsViewModel @Inject constructor(
     }
 
     fun loadAlbums() {
+        // Guard against double-taps on Retry: a load is already in flight
+        if (refreshing.value) return
+
+        refreshing.value = true
         viewModelScope.launch {
             try {
                 repository.refresh()
                 refreshFailed.value = false
             } catch (_: Exception) {
                 refreshFailed.value = true
+            } finally {
+                refreshing.value = false
             }
         }
     }

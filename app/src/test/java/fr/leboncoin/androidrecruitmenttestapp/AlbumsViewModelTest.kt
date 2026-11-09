@@ -6,6 +6,7 @@ import fr.leboncoin.data.repository.AlbumRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -117,6 +118,11 @@ class AlbumsViewModelTest {
     /**
      * Recovery path: same behaviour as the Retry button of AlbumsScreen.
      * Fail first (Error state), then let the network answer and retry.
+     *
+     * The retry uses a (virtually) SLOW network: while the request is in
+     * flight the state must be Loading — the error screen is not allowed to
+     * sit there silently. (Without latency the fake would resolve within a
+     * single dispatch and the intermediate Loading would be conflated away.)
      */
     @Test
     fun `retry after a failure recovers to Success`() = runTest {
@@ -130,12 +136,58 @@ class AlbumsViewModelTest {
 
             // Simulates the user tapping Retry on a working network
             service.result = Result.success(sampleDto)
+            service.latencyMs = 5_000L
+            viewModel.loadAlbums()
+
+            // Advance into the pending-request window: the Retry click must
+            // have replaced the Error screen with the Loading spinner
+            advanceTimeBy(1_000)
+            assertEquals(
+                "Expected Loading while the retry is in flight",
+                AlbumsUiState.Loading,
+                awaitItem(),
+            )
+
+            advanceUntilIdle()
+            val state = awaitItem()
+            assertTrue("Expected Success state after retry, got $state", state is AlbumsUiState.Success)
+            assertEquals(sampleAlbums, (state as AlbumsUiState.Success).albums)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
+     * Double-tap on Retry while a load is in flight: the second call must be
+     * a no-op (no second request fired), the first one still completes the
+     * state machine Error -> Loading -> Success.
+     */
+    @Test
+    fun `retry double-tap while in flight does not restart the request`() = runTest {
+        service.result = Result.failure(IOException("Network down"))
+        val viewModel = createViewModel()
+
+        viewModel.uiState.test {
+            assertEquals(AlbumsUiState.Loading, awaitItem())
+            advanceUntilIdle()
+            assertTrue("Expected Error state", awaitItem() is AlbumsUiState.Error)
+
+            service.result = Result.success(sampleDto)
+            service.latencyMs = 5_000L
+            viewModel.loadAlbums()
+            advanceTimeBy(1_000)
+            assertEquals(AlbumsUiState.Loading, awaitItem())
+
+            // Second tap mid-flight
             viewModel.loadAlbums()
             advanceUntilIdle()
 
             val state = awaitItem()
-            assertTrue("Expected Success state after retry, got $state", state is AlbumsUiState.Success)
-            assertEquals(sampleAlbums, (state as AlbumsUiState.Success).albums)
+            assertTrue("Expected Success state, got $state", state is AlbumsUiState.Success)
+            assertEquals(
+                "The second Retry click must not fire a second request",
+                2,  // initial load + first retry
+                service.callCount,
+            )
             cancelAndIgnoreRemainingEvents()
         }
     }
