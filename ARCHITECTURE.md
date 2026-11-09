@@ -478,6 +478,10 @@ le scope singleton Hilt :
   par item (`remember(album)`) — une recomposition déclenchée par un toggle
   favori ne relance pas le téléchargement d'image — et `contentType`
   positionné sur les items des deux listes pour recycler efficacement.
+- **Animations de liste** : les items des deux listes portent
+  `Modifier.animateItem()` — apparition et disparition en fondu,
+  repositionnement glissé : retirer un favori fait fondre la carte pendant
+  que ses voisins se resserrent, plutôt qu'une disparition brutale.
 - **Accessibilité / textes** : `contentDescription` basés sur les ressources
   `strings.xml`, pas de chaîne en dur ; états vides et d'erreur affichés
   (favoris vide, erreur réseau avec bouton Retry).

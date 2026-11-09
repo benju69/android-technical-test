@@ -91,6 +91,10 @@ private fun AlbumsContent(
                 onItemSelected = onItemSelected,
                 onFavoriteToggle = onFavoriteToggle,
                 imageSharedKey = sharedKeyPrefix?.let { "$it-${album.id}" },
+                // same lazy-item animations as the Favorites tab: the list
+                // fades in when it appears and items keep moving smoothly
+                // if the refresh order changes
+                modifier = Modifier.animateItem(),
             )
         }
     }

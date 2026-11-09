@@ -90,6 +90,10 @@ fun FavoritesContent(
                         onItemSelected = onItemSelected,
                         onFavoriteToggle = onFavoriteToggle,
                         imageSharedKey = sharedKeyPrefix?.let { "$it-${album.id}" },
+                        // Insert/remove/placement animations: an unfavored
+                        // album fades out while the neighbours slide into
+                        // its place, instead of vanishing abruptly
+                        modifier = Modifier.animateItem(),
                     )
                 }
             }
