@@ -338,8 +338,11 @@ crasher systématiquement ».
 
 Le bouton cœur (`FavoriteButton`) est **partagé** entre la liste et le détail
 (`ui/FavoriteButton.kt`) : même interaction, mêmes strings d'accessibilité,
-un seul endroit à faire évoluer. Les écrans sont stateless et préviewables,
-testables sans activity.
+un seul endroit à faire évoluer. Son cœur est **animé** :
+`LeboncoinAnimatedIcons.likeHeart()` fait **morpher** le path du contour
+vers le rempli (piloté par `atEnd = favorite`) — le toggle est une vraie
+animation de morphing plutôt qu'un échange d'icône. Les écrans sont
+stateless et préviewables, testables sans activity.
 
 ### 4.3 Single-activity + Navigation Compose
 
